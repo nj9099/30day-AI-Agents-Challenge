@@ -216,3 +216,15 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+.venv/
+.env
+.env.*
+__pycache__/
+*/venv/
+*/__pycache__/
+.vscode/
+*.key
+*.pem
+*.p12
+*.pfx

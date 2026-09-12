@@ -4,7 +4,7 @@ import re
 from models import Recipe, Ingredient
 
 
-RECIPES_DIR = Path("recipes")
+RECIPES_DIR = Path(__file__).resolve().parent / "recipes"
 
 
 # Common recipe units and their normalized forms

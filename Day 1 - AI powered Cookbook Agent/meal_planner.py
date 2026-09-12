@@ -83,20 +83,30 @@ def create_meal_plan(requirements):
     if not eligible_recipes:
         raise ValueError("No suitable recipes were found for the user's requirements.")
 
-    retrieved_documents = retrieve_recipes(requirements, eligible_recipes)
+    try:
+        retrieved_documents = retrieve_recipes(requirements, eligible_recipes)
+    except Exception:
+        retrieved_documents = []
 
-    if not retrieved_documents:
-        raise ValueError("No relevant recipes were found by the retriever.")
+    if retrieved_documents:
+        retrieved_recipe_names = {
+            document.metadata["recipe_name"] for document in retrieved_documents
+        }
+        candidate_recipes = [
+            recipe for recipe in eligible_recipes if recipe.name in retrieved_recipe_names
+        ]
+    else:
+        candidate_recipes = []
 
-    retrieved_recipe_names = {
-        document.metadata["recipe_name"] for document in retrieved_documents
-    }
+    # Fallback to top-scoring eligible recipes if retrieval returned no matches
+    if not candidate_recipes:
+        candidate_recipes = sorted(
+            eligible_recipes,
+            key=lambda r: score_recipe(r, requirements),
+            reverse=True
+        )[:8]
 
-    recipes = [
-        recipe for recipe in eligible_recipes if recipe.name in retrieved_recipe_names
-    ]
-
-    return MEAL_PLAN_CHAIN.invoke({"requirements": requirements, "recipes": recipes})
+    return MEAL_PLAN_CHAIN.invoke({"requirements": requirements, "recipes": candidate_recipes})
 
 
 # from llm import meal_planner_llm

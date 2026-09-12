@@ -1,0 +1,140 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Meal Planner</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body class="bg-gray-50 text-gray-900 antialiased min-h-screen flex flex-col">
+
+  <!-- ── Header ──────────────────────────────────────────────────── -->
+  <header class="bg-white border-b border-gray-200 sticky top-0 z-40">
+    <div class="max-w-3xl mx-auto px-6 py-4 flex items-center gap-3">
+      <span class="text-2xl">🍽️</span>
+      <span class="text-xl font-bold tracking-tight">AI Meal Planner</span>
+    </div>
+  </header>
+
+  <!-- ── Wizard ──────────────────────────────────────────────────── -->
+  <main class="flex-1 max-w-3xl mx-auto w-full px-4 py-8 space-y-6" id="wizard-main">
+
+    <!-- Progress bar -->
+    <div id="progress-area">
+      <div class="flex justify-between text-xs text-gray-400 mb-1">
+        <span id="step-label">Step 1 of 8</span>
+        <span id="step-name-label"></span>
+      </div>
+      <div class="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+        <div id="progress-bar" class="h-full bg-blue-500 rounded-full transition-all duration-400" style="width:0%"></div>
+      </div>
+    </div>
+
+    <!-- Step card -->
+    <div id="step-card" class="step-card">
+      <!-- icon + title -->
+      <div class="flex items-center gap-3 mb-1">
+        <span id="step-icon" class="text-3xl"></span>
+        <div>
+          <h2 id="step-title" class="text-xl font-bold text-gray-900"></h2>
+          <p id="step-desc" class="text-sm text-gray-400 mt-0.5"></p>
+        </div>
+      </div>
+
+      <!-- Selection count badge -->
+      <div id="count-badge" class="count-badge hidden"></div>
+
+      <!-- Chip grid -->
+      <div id="chip-grid" class="chip-grid mt-5"></div>
+
+      <!-- Navigation -->
+      <div class="flex items-center justify-between mt-8">
+        <button id="btn-back" class="nav-btn-ghost" onclick="goBack()">← Back</button>
+        <div class="flex gap-3">
+          <button id="btn-skip" class="nav-btn-ghost" onclick="skipStep()">Skip →</button>
+          <button id="btn-next" class="nav-btn-primary" onclick="goNext()">Next →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Summary / Review step ──────────────────────────────── -->
+    <div id="review-card" class="step-card hidden">
+      <h2 class="text-xl font-bold mb-1">Review your selections</h2>
+      <p class="text-sm text-gray-400 mb-6">Here's what you picked. Adjust below then generate your plan.</p>
+
+      <div id="review-body" class="space-y-4"></div>
+
+      <!-- Settings row -->
+      <div class="grid grid-cols-2 gap-4 mt-6">
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Servings per meal</label>
+          <div id="servings-chips" class="flex flex-wrap gap-2"></div>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Plan for how many days</label>
+          <div id="days-chips" class="flex flex-wrap gap-2"></div>
+        </div>
+      </div>
+
+      <div class="mt-6">
+        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Dietary restrictions</label>
+        <div id="restriction-chips" class="flex flex-wrap gap-2"></div>
+      </div>
+
+      <div class="mt-6">
+        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Meal preferences</label>
+        <div id="preference-chips" class="flex flex-wrap gap-2"></div>
+      </div>
+
+      <div class="flex items-center justify-between mt-8">
+        <button class="nav-btn-ghost" onclick="backToWizard()">← Back</button>
+        <button id="btn-generate" class="generate-btn" onclick="generatePlan()">
+          <span id="gen-icon">✨</span>
+          <span id="gen-text">Generate My Meal Plan</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ── Results ─────────────────────────────────────────────── -->
+    <div id="result-card" class="hidden space-y-6">
+      <div class="flex items-center justify-between">
+        <h2 class="text-2xl font-bold">Your Meal Plan</h2>
+        <button class="text-sm text-gray-500 hover:text-gray-700 underline" onclick="startOver()">Start over</button>
+      </div>
+      <div id="summary-box" class="bg-blue-50 border border-blue-100 text-blue-800 rounded-xl px-5 py-3 text-sm hidden"></div>
+      <div id="meals-grid" class="grid sm:grid-cols-2 gap-4"></div>
+    </div>
+
+  </main>
+
+  <!-- ── Toast ──────────────────────────────────────────────────── -->
+  <div id="toast" class="toast hidden"><span id="toast-msg"></span></div>
+
+  <!-- ── Recipe Modal ───────────────────────────────────────────── -->
+  <div id="recipe-modal" class="modal-backdrop hidden" onclick="handleBackdropClick(event)">
+    <div class="modal-box" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h2 id="modal-title" class="text-xl font-bold text-gray-900 leading-snug pr-4"></h2>
+        <button id="modal-close" class="modal-close-btn" onclick="closeModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="modal-tags" class="flex flex-wrap gap-2 mb-3"></div>
+        <div id="modal-meta" class="flex flex-wrap gap-4 text-sm text-gray-500 mb-5"></div>
+        <div class="mb-5">
+          <div class="modal-section-label">Ingredients</div>
+          <ul id="modal-ingredients" class="space-y-1.5 text-sm"></ul>
+        </div>
+        <div>
+          <div class="modal-section-label">Instructions</div>
+          <ol id="modal-instructions" class="space-y-3 text-sm list-none"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

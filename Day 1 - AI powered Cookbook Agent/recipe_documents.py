@@ -1,3 +1,4 @@
+from pathlib import Path
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
 from langchain_chroma import Chroma
@@ -7,6 +8,8 @@ from recipe_loader import load_recipes
 from dotenv import load_dotenv
 
 load_dotenv()
+
+CHROMA_DIR = str(Path(__file__).resolve().parent / "chroma_db")
 
 embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 
@@ -57,11 +60,20 @@ Notes:
 
 
 def load_vector_store():
-    return Chroma(
+    store = Chroma(
         collection_name="recipes",
         embedding_function=embeddings,
-        persist_directory="./chroma_db",
+        persist_directory=CHROMA_DIR,
     )
+    try:
+        existing = store.get()
+        if not existing or len(existing.get("ids", [])) == 0:
+            docs = load_recipe_documents()
+            if docs:
+                store.add_documents(docs)
+    except Exception:
+        pass
+    return store
 
 
 def build_retrieval_query(requirements):

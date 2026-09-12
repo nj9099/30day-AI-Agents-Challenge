@@ -228,3 +228,39 @@ __pycache__/
 *.pem
 *.p12
 *.pfx
+
+# Vector databases & RAG stores
+chroma_db/
+**/chroma_db/
+faiss_index/
+**/faiss_index/
+*.chroma/
+
+# Local databases & Checkpoint files
+*.sqlite
+*.sqlite3
+*.sqlite3-journal
+*.db
+*.db-journal
+
+# Agent frameworks & caches
+.langchain/
+.langgraph/
+
+# Operating System files
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+[Dd]esktop.ini
+
+# IDE & Editor artifacts
+.idea/
+*.swp
+*.swo
+*~
+*.code-workspace
+

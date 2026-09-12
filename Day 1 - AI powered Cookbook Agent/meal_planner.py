@@ -1,14 +1,14 @@
 from llm import meal_planner_llm
 from prompts import MEAL_PLANNER_SYSTEM_PROMPT
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnableLambda
 from recipe_loader import load_recipes
+from recipe_documents import retrieve_recipes
 
 
-def create_meal_plan(requirements):
-    recipes = load_recipes()
-    recipes = filter_recipes(recipes, requirements)
-
-    if not recipes:
-        raise ValueError("No suitable recipes were found for the user's requirements.")
+def prepare_meal_plan_input(data):
+    requirements = data["requirements"]
+    recipes = data["recipes"]
 
     recipe_text = "\n\n".join(
         f"""
@@ -62,9 +62,41 @@ Available recipes:
 Create the meal plan based on these requirements.
 """
 
-    messages = [("system", MEAL_PLANNER_SYSTEM_PROMPT), ("human", user_prompt)]
+    return {"user_prompt": user_prompt}
 
-    return meal_planner_llm.invoke(messages)
+
+PREPARE_MEAL_PLAN_INPUT = RunnableLambda(prepare_meal_plan_input)
+
+MEAL_PLAN_PROMPT = ChatPromptTemplate.from_messages(
+    [("system", MEAL_PLANNER_SYSTEM_PROMPT), ("human", "{user_prompt}")]
+)
+
+MEAL_PLAN_CHAIN = PREPARE_MEAL_PLAN_INPUT | MEAL_PLAN_PROMPT | meal_planner_llm
+
+
+def create_meal_plan(requirements):
+
+    recipes = load_recipes()
+
+    eligible_recipes = filter_recipes(recipes, requirements)
+
+    if not eligible_recipes:
+        raise ValueError("No suitable recipes were found for the user's requirements.")
+
+    retrieved_documents = retrieve_recipes(requirements, eligible_recipes)
+
+    if not retrieved_documents:
+        raise ValueError("No relevant recipes were found by the retriever.")
+
+    retrieved_recipe_names = {
+        document.metadata["recipe_name"] for document in retrieved_documents
+    }
+
+    recipes = [
+        recipe for recipe in eligible_recipes if recipe.name in retrieved_recipe_names
+    ]
+
+    return MEAL_PLAN_CHAIN.invoke({"requirements": requirements, "recipes": recipes})
 
 
 # from llm import meal_planner_llm
@@ -267,8 +299,6 @@ def filter_recipes(recipes, requirements):
 
         recipe_tags = {tag.lower().strip().replace(" ", "-") for tag in recipe.tags}
 
-        print(recipe.name, recipe.tags)
-
         for restriction in requirements.dietary_restrictions:
             restriction = restriction.lower()
 
@@ -303,8 +333,6 @@ def filter_recipes(recipes, requirements):
             continue
 
         eligible_recipes.append(recipe)
-
-        print(f"{recipe.name} matches: {matching_ingredients}")
 
     return eligible_recipes
 

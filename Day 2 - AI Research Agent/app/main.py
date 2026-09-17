@@ -16,28 +16,26 @@ class State(TypedDict):
     question: str
     answer: str
     complexity: str
+    isToolNeeded: str
 
 class Classification(BaseModel):
     complexity: Literal["simple", "complex"] = Field (
         description="Whether the question is simple or complex"
     )
-    isToolNeeded: Literal["true", "false"] 
     
-
+ 
+class ToolClassification(BaseModel):
+    isToolNeeded: Literal["yes", "no"] = Field (
+        description="Whether the question is an arithemetic problem"
+    )
 
 # Create LLM node
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
 classifier_llm = llm.with_structured_output(Classification)
+tool_classifier_llm  = llm.with_structured_output(ToolClassification)
 
 llm_with_tools = llm.bind_tools([calculator])
-
-
-# Define the LLM node
-# def ask_llm(state: State):
-#     response = llm.invoke(state["question"])
-
-#     return {"answer": response.content}
 
 
 def classify_question(state: State):
@@ -92,26 +90,38 @@ def route_question(state: State):
 
     return "research"
 
+def tool_routing(state: State):
+    if state["isToolNeeded"] == "yes":
+        return "calculator"
+    return "direct_answer"
+
 def calculator_node(state: State):
     tool_call_response = llm_with_tools.invoke(
         state["question"]
     )
 
-    tool_call = tool_call_response.tool_calls[0]
+    if tool_call_response.tool_calls[0]:
+        tool_call = tool_call_response.tool_calls[0]
  
-    tool_result = calculator.invoke(tool_call["args"])
+        tool_result = calculator.invoke(tool_call["args"])
+
+        return {
+            "answer": str(tool_result)
+        }
 
     return {
-        "answer": str(tool_result)
+        "answer": tool_call_response.content
     }
 
 def tool_decision(state: State):
     question = state["question"]
 
-    response = classifier_llm.invoke([
+    response = tool_classifier_llm.invoke([
         {
             "role": "system",
-            "content": "Check if this is an arithemetic question, and if it requires the use of a calculator tool to answer it. Return exactly 'true' or 'false'"
+            "content": "Classify the user's question as either "
+                    "arithemtic or not. "
+                    "Return only one word: 'yes' if arithemetic or 'no' if not arithmetic."
         },
         {
             "role": "user",
@@ -141,16 +151,16 @@ graph.add_conditional_edges(
     route_question,
     {
         "tool_needed": "tool_needed",
-        "direct_answer": "direct_answer",
+        "research": "research",
     },
 )
 
 graph.add_conditional_edges(
     "tool_needed",
-    tool_decision,
+    tool_routing,
     {
-        "true": "calculator",
-        "false": "research"
+        "calculator" : "calculator",
+        "direct_answer": "direct_answer"
     }
 )
 
@@ -166,11 +176,7 @@ app = graph.compile()
 
 # 7. Run the graph
 result = app.invoke(
-    {"question": "What is 15 times 31", "answer": "", "complexity": "", "isToolNeeded": ""}
+    {"question": "What is 44*891?", "answer": "", "complexity": "", "isToolNeeded": ""}
 )
 
 print(result)
-
-# print(calculator)
-# print(calculator.name)
-# print(calculator.description)

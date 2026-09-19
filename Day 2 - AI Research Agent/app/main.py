@@ -263,6 +263,19 @@ def validate_research(state: State):
     }
 
 
+# def validate_research(state: State):
+#     if state["research_attempts"] == 1:
+#         return {
+#             "research_valid": "no",
+#             "research_validation_reason": "Temporary test failure"
+#         }
+
+#     return {
+#         "research_valid": "yes",
+#         "research_validation_reason": "Temporary test success"
+#     }
+
+
 # 3. Create the graph
 graph = StateGraph(State)
 
@@ -305,13 +318,15 @@ result = app.invoke(
         "messages": [
             {
                 "role": "user",
-                "content": "Who was the best scorer in the 2023 NBA season?",
+                "content": "What were the major advances in quantum computing in 2023?",
             }
         ],
         "research_attempts": 0,
     }
 )
 
-print(result["research_attempts"])
-print(result["research_valid"])
+print("Attempts:", result["research_attempts"])
+print("Valid:", result["research_valid"])
+print("Reason:", result["research_validation_reason"])
+print("\nAnswer:\n")
 print(result["messages"][-1].content)

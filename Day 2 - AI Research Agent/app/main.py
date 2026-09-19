@@ -22,7 +22,9 @@ class State(TypedDict):
     research_subject: str
     research_is_latest: bool
     research_results: list
-
+    research_valid: str
+    research_validation_reason: str
+    research_attempts: int
 
 
 class Classification(BaseModel):
@@ -66,6 +68,17 @@ class ResearchClassification(BaseModel):
     )
 
 
+class ResearchValidation(BaseModel):
+    is_valid: Literal["yes", "no"] = Field(
+        description=(
+            "Whether the research results are relevant to the user's "
+            "question and requested time period."
+        )
+    )
+
+    reason: str = Field(description="Brief explanation for the validation decision.")
+
+
 # Create LLM node
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
@@ -73,6 +86,7 @@ classifier_llm = llm.with_structured_output(Classification)
 tool_classifier_llm = llm.with_structured_output(ToolClassification)
 research_classifier = llm.with_structured_output(ResearchIntent)
 research_decision_llm = llm.with_structured_output(ResearchClassification)
+research_validator = llm.with_structured_output(ResearchValidation)
 
 llm_with_tools = llm.bind_tools([calculator, word_counter, research_topic])
 tool_node = ToolNode([calculator, word_counter, research_topic])
@@ -96,10 +110,22 @@ def route_tools(state: State):
 def route_research(state: State):
     if state["research_needed"] == "yes":
         return "research"
-    return "agent"
+    return "retry"
+
+
+def route_validation(state: State):
+    if state["research_valid"] == "yes":
+        return "synthesis"
+
+    if state["research_attempts"] < 2:
+        return "retry"
+
+    return "synthesis"
 
 
 def research(state: State):
+    attempt = state["research_attempts"] + 1
+
     question = state["messages"][0].content
 
     intent = research_classifier.invoke(
@@ -132,7 +158,8 @@ def research(state: State):
         "research_subject": intent.topic,
         "research_year": intent.year,
         "research_is_latest": intent.is_latest,
-        "research_results": results
+        "research_results": results,
+        "research_attempts": attempt,
     }
 
 
@@ -161,6 +188,81 @@ def research_decision(state: State):
     return {"research_needed": response.isResearch}
 
 
+def research_sysnthesis(state: State):
+    question = state["messages"][0].content
+    results = state["research_results"]
+
+    research_text = "\n\n".join(
+        f"Title: {result['title']}\n"
+        f"URL: {result['url']}\n"
+        f"Content: {result['content']}"
+        for result in results
+    )
+
+    response = llm.invoke(
+        [
+            {
+                "role": "system",
+                "content": (
+                    "Answer the user's question using the research results "
+                    "provided below. Synthesize the information clearly. "
+                    "Do not invent facts that are not supported by the "
+                    "research. If the sources disagree or the evidence is "
+                    "limited, mention that."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"Question:\n{question}\n\n" f"Research results:\n{research_text}"
+                ),
+            },
+        ]
+    )
+
+    return {"messages": [response]}
+
+
+def validate_research(state: State):
+    question = state["messages"][0].content
+    results = state["research_results"]
+
+    research_text = "\n\n".join(
+        f"Title: {result['title']}\n"
+        f"URL: {result['url']}\n"
+        f"Content: {result['content']}"
+        for result in results
+    )
+
+    response = research_validator.invoke(
+        [
+            {
+                "role": "system",
+                "content": (
+                    "Evaluate whether the research results are relevant "
+                    "to the user's question. Pay particular attention to "
+                    "the requested year or time period. "
+                    "Return 'yes' only if the results are sufficiently "
+                    "relevant to answer the question. "
+                    "Return 'no' if the results contain a significant "
+                    "topic or time-period mismatch."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"Question:\n{question}\n\n" f"Research results:\n{research_text}"
+                ),
+            },
+        ]
+    )
+
+    return {
+        "research_valid": response.is_valid,
+        "research_validation_reason": response.reason,
+    }
+
+
 # 3. Create the graph
 graph = StateGraph(State)
 
@@ -168,6 +270,8 @@ graph.add_node("agent", agent)
 graph.add_node("tools", tool_node)
 graph.add_node("research", research)
 graph.add_node("research_decision", research_decision)
+graph.add_node("research_synthesis", research_sysnthesis)
+graph.add_node("validate_research", validate_research)
 
 graph.add_edge(START, "research_decision")
 
@@ -180,11 +284,18 @@ graph.add_conditional_edges(
     },
 )
 
-graph.add_edge("research", END)
-
 graph.add_conditional_edges("agent", route_tools, {"tools": "tools", END: END})
-
 graph.add_edge("tools", "agent")
+
+graph.add_edge("research", "validate_research")
+
+graph.add_conditional_edges(
+    "validate_research",
+    route_validation,
+    {"synthesis": "research_synthesis", "retry": "research"},
+)
+graph.add_edge("research_synthesis", END)
+
 
 # 6. Compile the graph
 app = graph.compile()
@@ -194,14 +305,13 @@ result = app.invoke(
         "messages": [
             {
                 "role": "user",
-                "content": "What were the major developments in quantum computing in 2023?"
+                "content": "Who was the best scorer in the 2023 NBA season?",
             }
         ],
-        "research_needed": "",
-        "research_subject": "",
-        "research_year": None,
-        "research_is_latest": False,
+        "research_attempts": 0,
     }
 )
 
-print(result)
+print(result["research_attempts"])
+print(result["research_valid"])
+print(result["messages"][-1].content)

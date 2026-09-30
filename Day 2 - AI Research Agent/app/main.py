@@ -1,13 +1,11 @@
-from email import message
-from re import S
+
 from typing import Annotated, Literal, TypedDict
 from pydantic import BaseModel, Field, model_validator
 
 from dotenv import load_dotenv
-from urllib3 import response
 from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, START, END, add_messages
-from langgraph.prebuilt import ToolNode, tool_node
+from langgraph.prebuilt import ToolNode
 
 from tools import calculator, word_counter, research_topic
 
@@ -110,7 +108,7 @@ def route_tools(state: State):
 def route_research(state: State):
     if state["research_needed"] == "yes":
         return "research"
-    return "retry"
+    return "agent"
 
 
 def route_validation(state: State):
@@ -326,7 +324,7 @@ result = app.invoke(
 )
 
 print("Attempts:", result["research_attempts"])
-print("Valid:", result["research_valid"])
-print("Reason:", result["research_validation_reason"])
+# print("Valid:", result["research_valid"])
+# print("Reason:", result["research_validation_reason"])
 print("\nAnswer:\n")
-print(result["messages"][-1].content)
+print(result)

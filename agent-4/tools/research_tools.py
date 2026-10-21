@@ -41,8 +41,16 @@ def research_topic(
 ):
     """Search the web for information about a topic."""
 
+    search_query = f"{topic} related to : {query}"
+
+    if year is not None:
+        search_query += f" published or announced in {year}"
+
+    if is_latest:
+        search_query += " latest developments"
+
     response = tavily_client.search(
-        query=query,
+        query=search_query,
         max_results=3
     )
 

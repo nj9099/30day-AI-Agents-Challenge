@@ -101,7 +101,7 @@ synthesizer_chain = synthesizer_prompt | synthesizer_llm
 async def synthesize(
     user_question: str,
     research_results: dict,
-    analysis: str,
+    analysis: dict,
     validation_result: dict
 ) -> ResearchAnswer:
     

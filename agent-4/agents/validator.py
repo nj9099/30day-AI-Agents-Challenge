@@ -130,7 +130,7 @@ validation_chain = validator_prompt | Validation_llm
 async def validate(
     user_question: str,
     research_results: dict,
-    analysis: str
+    analysis: dict
 ) -> ValidationResult:
 
     result = await validation_chain.ainvoke({
